@@ -26,22 +26,18 @@ ginis <- cip_noc|>
   filter(Gini!=1)
 ```
 
+# Inputs {.sidebar}
 
-Inputs {.sidebar}
-=====================================
+-   Statistics Canada table 98-10-0403 reports employment counts by field of study (CIP) and occupation (NOC).
 
+-   The goal of this exercise is to
 
-*  Statistics Canada table 98-10-0403 reports employment counts by field of study (CIP) and occupation (NOC).
-
-*  The goal of this exercise is to 
-
-1) identify CIPs that are highly correlated in terms of their NOC counts, and 
-2) investigate how targeted/specialized CIPs are in terms of inequality across occupations.  
+1)  identify CIPs that are highly correlated in terms of their NOC counts, and
+2)  investigate how targeted/specialized CIPs are in terms of inequality across occupations.
 
 On the first page, the plot on the left gives the top 10 correlated CIPs and the plot on the right shows the NOC counts for two CIPs.
 
 On the second page, the plot shows the Gini coefficient for each CIP.
-
 
 ```{r}
 selectInput(
@@ -86,14 +82,15 @@ reactive_ginis <- reactive({
 
 ```
 
-Similarity between Fields of Study
-=====================================  
- 
-Column
--------------------------------------
-    
+ [![github logo](github.png){width=100px}](https://github.com/bcgov/cip-stitutability){target='_blank'}
+
+
+# Similarity between Fields of Study
+
+## Column
+
 ### `r renderUI({input$cip})`
-    
+
 ```{r}
 renderPlotly({
   plt <- ggplot2::ggplot(reactive_cor(), aes(Correlation, 
@@ -118,8 +115,7 @@ renderPlotly({
 })
 ```
 
-Column
--------------------------------------
+## Column
 
 ### `r renderUI({paste("Spearman Correlation:",reactive_title())})`
 
@@ -156,8 +152,7 @@ renderPlotly({
 })
 ```
 
-Field of Study Purity
-=====================================================
+# Field of Study Purity
 
 ```{r}
 renderPlotly({
@@ -183,7 +178,3 @@ plotly::ggplotly(plt, tooltip = "text")|>
   plotly::config(displayModeBar = F)
 })
 ```
-
-
-
-
