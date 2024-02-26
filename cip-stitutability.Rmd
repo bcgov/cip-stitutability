@@ -1,0 +1,189 @@
+---
+title: "CIP-stitutability and CIP purity"
+output: flexdashboard::flex_dashboard
+runtime: shiny
+resource_files:
+- data/cip_noc_processed.csv
+- data/correlations.csv
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+library(here)
+library(vroom)
+library(janitor)
+library(plotly)
+library(DescTools)
+```
+
+```{r}
+cor_tbbl <- vroom(here("data","correlations.csv"))
+cips <- unique(cor_tbbl$`Field of Study`)
+cip_noc <- vroom(here("data","cip_noc_processed.csv"))
+ginis <- cip_noc|>
+  summarize(across(-NOC, Gini))|>
+  pivot_longer(cols=everything(), names_to = "CIP", values_to = "Gini")|>
+  filter(Gini!=1)
+```
+
+
+Inputs {.sidebar}
+=====================================
+
+
+*  Statistics Canada table 98-10-0403 reports employment counts by field of study (CIP) and occupation (NOC).
+
+*  The goal of this exercise is to 
+
+1) identify CIPs that are highly correlated in terms of their NOC counts, and 
+2) investigate how targeted/specialized CIPs are in terms of inequality across occupations.  
+
+On the first page, the plot on the left gives the top 10 correlated CIPs and the plot on the right shows the NOC counts for two CIPs.
+
+On the second page, the plot shows the Gini coefficient for each CIP.
+
+
+```{r}
+selectInput(
+  "cip",
+  "Select a field of study",
+  cips,
+  selected = "45.06 Economics"
+)
+reactive_cor <- reactive({
+  cor_tbbl|>
+    filter(`Field of Study`==input$cip)
+})
+
+renderUI({
+  selectInput("cip2", 
+              "Select one of the top 10 alternatives", 
+              choices = reactive_cor()$`Field of Study 2`, 
+              selected= reactive_cor()$`Field of Study 2`[1])
+})
+
+reactive_point <- reactive({
+  reactive_cor()|>
+    filter(`Field of Study 2`==input$cip2)
+})
+
+reactive_nocs <- reactive({
+  cip_noc|>
+    select(NOC, input$cip, input$cip2)
+})
+
+reactive_title <- reactive({
+  reactive_cor()|>
+    filter(`Field of Study 2`==input$cip2)|>
+    pull(Correlation)|>
+    round(digits=3)
+})
+
+reactive_ginis <- reactive({
+  ginis|>
+    filter(CIP %in% c(input$cip, input$cip2))
+})
+
+```
+
+Similarity between Fields of Study
+=====================================  
+ 
+Column
+-------------------------------------
+    
+### `r renderUI({input$cip})`
+    
+```{r}
+renderPlotly({
+  plt <- ggplot2::ggplot(reactive_cor(), aes(Correlation, 
+                                             fct_reorder(`Field of Study 2`, Correlation), 
+                                             colour=same_broad,
+                                             text=paste(sjmisc::word_wrap(`Field of Study 2`,40),
+                                                        "\n Correlation:",round(Correlation, 3))
+                                             ),
+                         )+
+    geom_point()+
+    geom_point(data=reactive_point(), size=3, alpha=.5)+
+    labs(title="Top 10 Spearman correlations",
+       x=NULL, 
+       y=NULL,
+       colour="2 digit CIP")+
+    theme_minimal()+ 
+    theme(axis.text.y=element_blank(), 
+      axis.ticks.y=element_blank()) 
+  ggplotly(plt, tooltip = "text")|>
+    config(displayModeBar = F)|>
+    layout(legend = list(orientation = "h", x = 0.4, y = -0.2))
+})
+```
+
+Column
+-------------------------------------
+
+### `r renderUI({paste("Spearman Correlation:",reactive_title())})`
+
+```{r}
+renderPlotly({
+  alpha <- reactive_nocs()|>
+    filter(get(input$cip)>0,
+           get(input$cip2)>0
+           )|>
+    nrow()|>
+    log()
+ 
+  plt <- ggplot(reactive_nocs(), aes(get(input$cip), 
+                                     get(input$cip2),
+                                     text=paste("NOC:",
+                                                sjmisc::word_wrap(NOC,40),
+                                                "\n CIP:",
+                                                sjmisc::word_wrap(input$cip,40),
+                                                "=",
+                                                get(input$cip),
+                                                "\n CIP",
+                                                sjmisc::word_wrap(input$cip2,40),
+                                                "=",
+                                                get(input$cip2)
+                                     )))+
+    geom_point(alpha=1/alpha)+
+    labs(x=paste("NOC counts for",input$cip),
+         y=paste("NOC counts for",input$cip2))+
+    scale_x_continuous(trans="log10", labels = scales::comma)+
+    scale_y_continuous(trans="log10", labels = scales::comma)+
+    theme_minimal()
+  ggplotly(plt, tooltip = "text")|>
+    config(displayModeBar = F)
+})
+```
+
+Field of Study Purity
+=====================================================
+
+```{r}
+renderPlotly({
+  plt <- ggplot(ginis, aes(Gini,
+                  fct_reorder(CIP, Gini),
+                  text=paste(
+                    "CIP:",
+                    CIP,
+                    "\n Gini=",
+                    round(Gini,3)
+                  )
+                  ))+
+  geom_point(alpha=.5, size=.5)+
+  geom_point(data=reactive_ginis(), colour="red", size=2)+  
+  labs(x="Gini Coefficient",
+       y=NULL,
+       title="The Gini Coefficient measures how targeted a CIP is: if Gini=1 all grads employed in single NOC")+
+    theme_minimal()+
+  theme(axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())
+
+plotly::ggplotly(plt, tooltip = "text")|>
+  plotly::config(displayModeBar = F)
+})
+```
+
+
+
+
